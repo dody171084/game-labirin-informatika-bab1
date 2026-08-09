@@ -415,6 +415,132 @@
             player = { ...avatars[avatarId] }; // Kloning data
         }
 
+        // Fungsi untuk mengacak labirin bagian luar dan tengah
+        function generateRandomMaze() {
+            // Buat grid 21x21 yang dipenuhi dengan tembok (1)
+            let newMaze = Array(21).fill(null).map(() => Array(21).fill(1));
+
+            // Zona dalam yang tetap (Blok 5x5 di tengah - Koordinat x: 8-12, y: 8-12)
+            const innerZone = [
+                [1, 0, 1, 0, 1], // y = 8
+                [0, 0, 2, 0, 0], // y = 9
+                [1, 2, 3, 2, 1], // y = 10 (Core di tengah)
+                [0, 0, 2, 0, 0], // y = 11
+                [1, 0, 1, 0, 1]  // y = 12
+            ];
+            
+            // Pasang zona dalam ke dalam maze
+            for(let y = 0; y < 5; y++) {
+                for(let x = 0; x < 5; x++) {
+                    newMaze[8 + y][8 + x] = innerZone[y][x];
+                }
+            }
+
+            // Algoritma DFS (Depth-First Search) untuk membuat labirin
+            let visited = Array(10).fill(null).map(() => Array(10).fill(false));
+            
+            // Tandai 4 titik sudut area dalam sebagai 'visited' sebagai titik hubung awal
+            visited[4][4] = true; // merepresentasikan grid (9,9)
+            visited[5][4] = true; // merepresentasikan grid (11,9)
+            visited[4][5] = true; // merepresentasikan grid (9,11)
+            visited[5][5] = true; // merepresentasikan grid (11,11)
+
+            // Masukkan ke-4 titik ini ke stack untuk memulai pencarian dari tengah ke luar
+            let stack = [
+                {vx: 4, vy: 4}, {vx: 5, vy: 4}, {vx: 4, vy: 5}, {vx: 5, vy: 5}
+            ];
+            
+            // Acak urutan agar arah penyebaran jalur selalu berbeda
+            stack.sort(() => Math.random() - 0.5);
+
+            const dirs = [
+                {dx: 0, dy: -1}, // Atas
+                {dx: 1, dy: 0},  // Kanan
+                {dx: 0, dy: 1},  // Bawah
+                {dx: -1, dy: 0}  // Kiri
+            ];
+
+            // Proses mengukir jalur labirin (mengubah 1 jadi 0)
+            while(stack.length > 0) {
+                let curr = stack[stack.length - 1];
+                let unvisited = [];
+                
+                for(let d of dirs) {
+                    let nx = curr.vx + d.dx;
+                    let ny = curr.vy + d.dy;
+                    if(nx >= 0 && nx < 10 && ny >= 0 && ny < 10 && !visited[ny][nx]) {
+                        unvisited.push({vx: nx, vy: ny, dx: d.dx, dy: d.dy});
+                    }
+                }
+
+                if(unvisited.length > 0) {
+                    let next = unvisited[Math.floor(Math.random() * unvisited.length)];
+                    visited[next.vy][next.vx] = true;
+                    
+                    // Hitung posisi aktual di grid (21x21)
+                    let gcx = curr.vx * 2 + 1;
+                    let gcy = curr.vy * 2 + 1;
+                    
+                    // Hancurkan tembok di antara posisi sekarang dan selanjutnya
+                    newMaze[gcy][gcx] = 0; 
+                    newMaze[gcy + next.dy][gcx + next.dx] = 0; 
+                    newMaze[next.vy * 2 + 1][next.vx * 2 + 1] = 0; 
+                    
+                    stack.push({vx: next.vx, vy: next.vy});
+                } else {
+                    stack.pop(); // Mundur (Backtrack) jika buntu
+                }
+            }
+
+            // Kembalikan tata letak inti yang asli (antisipasi tertimpa proses pemuatan DFS)
+            for(let y = 0; y < 5; y++) {
+                for(let x = 0; x < 5; x++) {
+                    newMaze[8 + y][8 + x] = innerZone[y][x];
+                }
+            }
+
+            // Buka area titik mulai (Keempat sudut map)
+            newMaze[1][1] = 0;   // Atas Kiri (Byte-Bot)
+            newMaze[1][19] = 0;  // Atas Kanan (Cyber-Shield)
+            newMaze[19][1] = 0;  // Bawah Kiri (Data-Pulse)
+            newMaze[19][19] = 0; // Bawah Kanan (Code-Ninja)
+
+            // Hancurkan tembok ekstra (Looping) agar ada banyak alternatif jalan dan tidak melulu buntu
+            for(let i=0; i < 45; i++) {
+                let rx = Math.floor(Math.random() * 9) * 2 + 2; 
+                let ry = Math.floor(Math.random() * 9) * 2 + 1; 
+                if(Math.random() > 0.5) { let temp = rx; rx = ry; ry = temp; }
+                
+                // Hindari menyentuh area pertahanan dalam (zona 7x7)
+                if(rx >= 7 && rx <= 13 && ry >= 7 && ry <= 13) continue;
+
+                if (newMaze[ry][rx] === 1) {
+                    // Jika dinding memisahkan 2 jalur, hancurkan
+                    if ( (newMaze[ry][rx-1] === 0 && newMaze[ry][rx+1] === 0) || 
+                         (newMaze[ry-1][rx] === 0 && newMaze[ry+1][rx] === 0) ) {
+                        newMaze[ry][rx] = 0;
+                    }
+                }
+            }
+
+            // Taruh gerbang Firewall (Gate = 2) secara acak di jalur luar (sekitar 10-12 gerbang)
+            let pathCells = [];
+            for(let y = 1; y < 20; y++) {
+                for(let x = 1; x < 20; x++) {
+                    if(x >= 7 && x <= 13 && y >= 7 && y <= 13) continue; // Jangan di zona dalam
+                    if(newMaze[y][x] === 0) {
+                        pathCells.push({x: x, y: y});
+                    }
+                }
+            }
+            pathCells.sort(() => Math.random() - 0.5);
+            for(let i = 0; i < Math.min(12, pathCells.length); i++) {
+                newMaze[pathCells[i].y][pathCells[i].x] = 2;
+            }
+
+            return newMaze;
+        }
+
         function initGame() {
             if (!player) {
                 alert("Silakan pilih Guardian terlebih dahulu!");
@@ -432,7 +558,9 @@
             document.getElementById('gameScreen').classList.remove('hidden');
             
             gameState = 'playing';
-            maze = JSON.parse(JSON.stringify(originalMaze)); // Reset map
+            
+            // GUNAKAN GENERATOR LABIRIN ACAK!
+            maze = generateRandomMaze(); 
             score = 0;
             
             requestAnimationFrame(gameLoop);
